@@ -582,7 +582,8 @@ Expr<TO> ConvertToType(Expr<Type<FROMCAT, FROMKIND>> &&x) {
 
 template <typename TO> Expr<TO> ConvertToType(BOZLiteralConstant &&x) {
   static_assert(IsSpecificIntrinsicType<TO>);
-  if constexpr (TO::category == TypeCategory::Integer) {
+  if constexpr (TO::category == TypeCategory::Integer ||
+      TO::category == TypeCategory::Unsigned) {
     return Expr<TO>{
         Constant<TO>{Scalar<TO>::ConvertUnsigned(std::move(x)).value}};
   } else {
@@ -909,6 +910,9 @@ common::IfNoLvalue<std::optional<Expr<SomeType>>, WRAPPED> TypedWrapper(
     SWITCH_COVERS_ALL_CASES
   case TypeCategory::Integer:
     return WrapperHelper<TypeCategory::Integer, WRAPPER, WRAPPED>(
+        dyType.kind(), std::move(x));
+  case TypeCategory::Unsigned:
+    return WrapperHelper<TypeCategory::Unsigned, WRAPPER, WRAPPED>(
         dyType.kind(), std::move(x));
   case TypeCategory::Real:
     return WrapperHelper<TypeCategory::Real, WRAPPER, WRAPPED>(

@@ -979,6 +979,7 @@ public:
   bool Pre(const parser::TypeDeclarationStmt &);
   void Post(const parser::TypeDeclarationStmt &);
   void Post(const parser::IntegerTypeSpec &);
+  void Post(const parser::UnsignedTypeSpec &);
   void Post(const parser::IntrinsicTypeSpec::Real &);
   void Post(const parser::IntrinsicTypeSpec::Complex &);
   void Post(const parser::IntrinsicTypeSpec::Logical &);
@@ -5222,6 +5223,11 @@ Symbol &DeclarationVisitor::DeclareObjectEntity(
 void DeclarationVisitor::Post(const parser::IntegerTypeSpec &x) {
   if (!isVectorType_) {
     SetDeclTypeSpec(MakeNumericType(TypeCategory::Integer, x.v));
+  }
+}
+void DeclarationVisitor::Post(const parser::UnsignedTypeSpec &x) {
+  if (!isVectorType_) {
+    SetDeclTypeSpec(MakeNumericType(TypeCategory::Unsigned, x.v));
   }
 }
 void DeclarationVisitor::Post(const parser::IntrinsicTypeSpec::Real &x) {

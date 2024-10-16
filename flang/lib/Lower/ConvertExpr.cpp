@@ -194,7 +194,7 @@ enum class ConstituentSemantics {
 /// Convert parser's INTEGER relational operators to MLIR.  TODO: using
 /// unordered, but we may want to cons ordered in certain situation.
 static mlir::arith::CmpIPredicate
-translateRelational(Fortran::common::RelationalOperator rop) {
+translateSignedRelational(Fortran::common::RelationalOperator rop) {
   switch (rop) {
   case Fortran::common::RelationalOperator::LT:
     return mlir::arith::CmpIPredicate::slt;
@@ -210,6 +210,25 @@ translateRelational(Fortran::common::RelationalOperator rop) {
     return mlir::arith::CmpIPredicate::sge;
   }
   llvm_unreachable("unhandled INTEGER relational operator");
+}
+
+static mlir::arith::CmpIPredicate
+translateUnsignedRelational(Fortran::common::RelationalOperator rop) {
+  switch (rop) {
+  case Fortran::common::RelationalOperator::LT:
+    return mlir::arith::CmpIPredicate::ult;
+  case Fortran::common::RelationalOperator::LE:
+    return mlir::arith::CmpIPredicate::ule;
+  case Fortran::common::RelationalOperator::EQ:
+    return mlir::arith::CmpIPredicate::eq;
+  case Fortran::common::RelationalOperator::NE:
+    return mlir::arith::CmpIPredicate::ne;
+  case Fortran::common::RelationalOperator::GT:
+    return mlir::arith::CmpIPredicate::ugt;
+  case Fortran::common::RelationalOperator::GE:
+    return mlir::arith::CmpIPredicate::uge;
+  }
+  llvm_unreachable("unhandled UNSIGNED relational operator");
 }
 
 /// Convert parser's REAL relational operators to MLIR.
@@ -1050,6 +1069,14 @@ public:
   }
   template <int KIND>
   ExtValue genval(const Fortran::evaluate::Negate<Fortran::evaluate::Type<
+                      Fortran::common::TypeCategory::Unsigned, KIND>> &op) {
+    mlir::Value input = genunbox(op.left());
+    // Like LLVM, integer negation is the binary op "0 - value"
+    mlir::Value zero = genIntegerConstant<KIND>(builder.getContext(), 0);
+    return builder.create<mlir::arith::SubIOp>(getLoc(), zero, input);
+  }
+  template <int KIND>
+  ExtValue genval(const Fortran::evaluate::Negate<Fortran::evaluate::Type<
                       Fortran::common::TypeCategory::Real, KIND>> &op) {
     return builder.create<mlir::arith::NegFOp>(getLoc(), genunbox(op.left()));
   }
@@ -1083,15 +1110,19 @@ public:
   }
 
   GENBIN(Add, Integer, mlir::arith::AddIOp)
+  GENBIN(Add, Unsigned, mlir::arith::AddIOp)
   GENBIN(Add, Real, mlir::arith::AddFOp)
   GENBIN(Add, Complex, fir::AddcOp)
   GENBIN(Subtract, Integer, mlir::arith::SubIOp)
+  GENBIN(Subtract, Unsigned, mlir::arith::SubIOp)
   GENBIN(Subtract, Real, mlir::arith::SubFOp)
   GENBIN(Subtract, Complex, fir::SubcOp)
   GENBIN(Multiply, Integer, mlir::arith::MulIOp)
+  GENBIN(Multiply, Unsigned, mlir::arith::MulIOp)
   GENBIN(Multiply, Real, mlir::arith::MulFOp)
   GENBIN(Multiply, Complex, fir::MulcOp)
   GENBIN(Divide, Integer, mlir::arith::DivSIOp)
+  GENBIN(Divide, Unsigned, mlir::arith::DivUIOp)
   GENBIN(Divide, Real, mlir::arith::DivFOp)
 
   template <int KIND>
@@ -1200,8 +1231,14 @@ public:
   template <int KIND>
   ExtValue genval(const Fortran::evaluate::Relational<Fortran::evaluate::Type<
                       Fortran::common::TypeCategory::Integer, KIND>> &op) {
-    return createCompareOp<mlir::arith::CmpIOp>(op,
-                                                translateRelational(op.opr));
+    return createCompareOp<mlir::arith::CmpIOp>(
+        op, translateSignedRelational(op.opr));
+  }
+  template <int KIND>
+  ExtValue genval(const Fortran::evaluate::Relational<Fortran::evaluate::Type<
+                      Fortran::common::TypeCategory::Unsigned, KIND>> &op) {
+    return createCompareOp<mlir::arith::CmpIOp>(
+        op, translateUnsignedRelational(op.opr));
   }
   template <int KIND>
   ExtValue genval(const Fortran::evaluate::Relational<Fortran::evaluate::Type<
@@ -1217,7 +1254,7 @@ public:
   template <int KIND>
   ExtValue genval(const Fortran::evaluate::Relational<Fortran::evaluate::Type<
                       Fortran::common::TypeCategory::Character, KIND>> &op) {
-    return createCharCompare(op, translateRelational(op.opr));
+    return createCharCompare(op, translateSignedRelational(op.opr));
   }
 
   ExtValue
@@ -5100,18 +5137,27 @@ private:
       return fir::substBase(val, newBase);
     };
   }
-  template <int KIND>
-  CC genarr(const Fortran::evaluate::Negate<Fortran::evaluate::Type<
-                Fortran::common::TypeCategory::Integer, KIND>> &x) {
+  template <Fortran::common::TypeCategory CAT, int KIND>
+  CC genarrIntNeg(
+      const Fortran::evaluate::Expr<Fortran::evaluate::Type<CAT, KIND>> &left) {
     mlir::Location loc = getLoc();
-    auto f = genarr(x.left());
+    auto f = genarr(left);
     return [=](IterSpace iters) -> ExtValue {
       mlir::Value val = fir::getBase(f(iters));
-      mlir::Type ty =
-          converter.genType(Fortran::common::TypeCategory::Integer, KIND);
+      mlir::Type ty = converter.genType(CAT, KIND);
       mlir::Value zero = builder.createIntegerConstant(loc, ty, 0);
       return builder.create<mlir::arith::SubIOp>(loc, zero, val);
     };
+  }
+  template <int KIND>
+  CC genarr(const Fortran::evaluate::Negate<Fortran::evaluate::Type<
+                Fortran::common::TypeCategory::Integer, KIND>> &x) {
+    return genarrIntNeg(x.left());
+  }
+  template <int KIND>
+  CC genarr(const Fortran::evaluate::Negate<Fortran::evaluate::Type<
+                Fortran::common::TypeCategory::Unsigned, KIND>> &x) {
+    return genarrIntNeg(x.left());
   }
   template <int KIND>
   CC genarr(const Fortran::evaluate::Negate<Fortran::evaluate::Type<
@@ -5157,15 +5203,19 @@ private:
   }
 
   GENBIN(Add, Integer, mlir::arith::AddIOp)
+  GENBIN(Add, Unsigned, mlir::arith::AddIOp)
   GENBIN(Add, Real, mlir::arith::AddFOp)
   GENBIN(Add, Complex, fir::AddcOp)
   GENBIN(Subtract, Integer, mlir::arith::SubIOp)
+  GENBIN(Subtract, Unsigned, mlir::arith::SubIOp)
   GENBIN(Subtract, Real, mlir::arith::SubFOp)
   GENBIN(Subtract, Complex, fir::SubcOp)
   GENBIN(Multiply, Integer, mlir::arith::MulIOp)
+  GENBIN(Multiply, Unsigned, mlir::arith::MulIOp)
   GENBIN(Multiply, Real, mlir::arith::MulFOp)
   GENBIN(Multiply, Complex, fir::MulcOp)
   GENBIN(Divide, Integer, mlir::arith::DivSIOp)
+  GENBIN(Divide, Unsigned, mlir::arith::DivUIOp)
   GENBIN(Divide, Real, mlir::arith::DivFOp)
 
   template <int KIND>
@@ -6570,12 +6620,19 @@ private:
   template <int KIND>
   CC genarr(const Fortran::evaluate::Relational<Fortran::evaluate::Type<
                 Fortran::common::TypeCategory::Integer, KIND>> &x) {
-    return createCompareOp<mlir::arith::CmpIOp>(translateRelational(x.opr), x);
+    return createCompareOp<mlir::arith::CmpIOp>(
+        translateSignedRelational(x.opr), x);
+  }
+  template <int KIND>
+  CC genarr(const Fortran::evaluate::Relational<Fortran::evaluate::Type<
+                Fortran::common::TypeCategory::Unsigned, KIND>> &x) {
+    return createCompareOp<mlir::arith::CmpIOp>(
+        translateUnsignedRelational(x.opr), x);
   }
   template <int KIND>
   CC genarr(const Fortran::evaluate::Relational<Fortran::evaluate::Type<
                 Fortran::common::TypeCategory::Character, KIND>> &x) {
-    return createCompareCharOp(translateRelational(x.opr), x);
+    return createCompareCharOp(translateSignedRelational(x.opr), x);
   }
   template <int KIND>
   CC genarr(const Fortran::evaluate::Relational<Fortran::evaluate::Type<

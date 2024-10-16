@@ -107,6 +107,7 @@ genFIRType(mlir::MLIRContext *context, Fortran::common::TypeCategory tc,
   case Fortran::common::TypeCategory::Real:
     return genRealType(context, kind);
   case Fortran::common::TypeCategory::Integer:
+  case Fortran::common::TypeCategory::Unsigned:
     return genIntegerType(context, kind);
   case Fortran::common::TypeCategory::Complex:
     return genComplexType(context, kind);

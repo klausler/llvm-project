@@ -1382,6 +1382,15 @@ Expr<Type<TypeCategory::Integer, KIND>> FoldIntrinsicFunction(
   return Expr<T>{std::move(funcRef)};
 }
 
+template <int KIND>
+Expr<Type<TypeCategory::Unsigned, KIND>> FoldIntrinsicFunction(
+    FoldingContext &context,
+    FunctionRef<Type<TypeCategory::Unsigned, KIND>> &&funcRef) {
+  using T = Type<TypeCategory::Unsigned, KIND>;
+  // TODO pmk
+  return Expr<T>{std::move(funcRef)};
+}
+
 // Substitutes a bare type parameter reference with its value if it has one now
 // in an instantiation.  Bare LEN type parameters are substituted only when
 // the known value is constant.
@@ -1460,5 +1469,7 @@ std::optional<std::int64_t> ToInt64(const ActualArgument &arg) {
 #pragma warning(disable : 4661)
 #endif
 FOR_EACH_INTEGER_KIND(template class ExpressionBase, )
+FOR_EACH_UNSIGNED_KIND(template class ExpressionBase, )
 template class ExpressionBase<SomeInteger>;
+template class ExpressionBase<SomeUnsigned>;
 } // namespace Fortran::evaluate
