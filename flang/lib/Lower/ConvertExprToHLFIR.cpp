@@ -974,15 +974,19 @@ struct BinaryOp {};
   };
 
 GENBIN(Add, Integer, mlir::arith::AddIOp)
+GENBIN(Add, Unsigned, mlir::arith::AddIOp)
 GENBIN(Add, Real, mlir::arith::AddFOp)
 GENBIN(Add, Complex, fir::AddcOp)
 GENBIN(Subtract, Integer, mlir::arith::SubIOp)
+GENBIN(Subtract, Unsigned, mlir::arith::SubIOp)
 GENBIN(Subtract, Real, mlir::arith::SubFOp)
 GENBIN(Subtract, Complex, fir::SubcOp)
 GENBIN(Multiply, Integer, mlir::arith::MulIOp)
+GENBIN(Multiply, Unsigned, mlir::arith::MulIOp)
 GENBIN(Multiply, Real, mlir::arith::MulFOp)
 GENBIN(Multiply, Complex, fir::MulcOp)
 GENBIN(Divide, Integer, mlir::arith::DivSIOp)
+GENBIN(Divide, Unsigned, mlir::arith::DivUIOp)
 GENBIN(Divide, Real, mlir::arith::DivFOp)
 
 template <int KIND>
@@ -1067,7 +1071,7 @@ struct BinaryOp<Fortran::evaluate::Extremum<
 
 /// Convert parser's INTEGER relational operators to MLIR.
 static mlir::arith::CmpIPredicate
-translateRelational(Fortran::common::RelationalOperator rop) {
+translateSignedRelational(Fortran::common::RelationalOperator rop) {
   switch (rop) {
   case Fortran::common::RelationalOperator::LT:
     return mlir::arith::CmpIPredicate::slt;
@@ -1083,6 +1087,25 @@ translateRelational(Fortran::common::RelationalOperator rop) {
     return mlir::arith::CmpIPredicate::sge;
   }
   llvm_unreachable("unhandled INTEGER relational operator");
+}
+
+static mlir::arith::CmpIPredicate
+translateUnsignedRelational(Fortran::common::RelationalOperator rop) {
+  switch (rop) {
+  case Fortran::common::RelationalOperator::LT:
+    return mlir::arith::CmpIPredicate::ult;
+  case Fortran::common::RelationalOperator::LE:
+    return mlir::arith::CmpIPredicate::ule;
+  case Fortran::common::RelationalOperator::EQ:
+    return mlir::arith::CmpIPredicate::eq;
+  case Fortran::common::RelationalOperator::NE:
+    return mlir::arith::CmpIPredicate::ne;
+  case Fortran::common::RelationalOperator::GT:
+    return mlir::arith::CmpIPredicate::ugt;
+  case Fortran::common::RelationalOperator::GE:
+    return mlir::arith::CmpIPredicate::uge;
+  }
+  llvm_unreachable("unhandled UNSIGNED relational operator");
 }
 
 /// Convert parser's REAL relational operators to MLIR.
@@ -1122,7 +1145,22 @@ struct BinaryOp<Fortran::evaluate::Relational<
                                          const Op &op, hlfir::Entity lhs,
                                          hlfir::Entity rhs) {
     auto cmp = builder.create<mlir::arith::CmpIOp>(
-        loc, translateRelational(op.opr), lhs, rhs);
+        loc, translateSignedRelational(op.opr), lhs, rhs);
+    return hlfir::EntityWithAttributes{cmp};
+  }
+};
+
+template <int KIND>
+struct BinaryOp<Fortran::evaluate::Relational<
+    Fortran::evaluate::Type<Fortran::common::TypeCategory::Unsigned, KIND>>> {
+  using Op = Fortran::evaluate::Relational<
+      Fortran::evaluate::Type<Fortran::common::TypeCategory::Unsigned, KIND>>;
+  static hlfir::EntityWithAttributes gen(mlir::Location loc,
+                                         fir::FirOpBuilder &builder,
+                                         const Op &op, hlfir::Entity lhs,
+                                         hlfir::Entity rhs) {
+    auto cmp = builder.create<mlir::arith::CmpIOp>(
+        loc, translateUnsignedRelational(op.opr), lhs, rhs);
     return hlfir::EntityWithAttributes{cmp};
   }
 };
@@ -1171,7 +1209,7 @@ struct BinaryOp<Fortran::evaluate::Relational<
     auto [rhsExv, rhsCleanUp] =
         hlfir::translateToExtendedValue(loc, builder, rhs);
     auto cmp = fir::runtime::genCharCompare(
-        builder, loc, translateRelational(op.opr), lhsExv, rhsExv);
+        builder, loc, translateSignedRelational(op.opr), lhsExv, rhsExv);
     if (lhsCleanUp)
       (*lhsCleanUp)();
     if (rhsCleanUp)
@@ -1305,6 +1343,24 @@ struct UnaryOp<Fortran::evaluate::Negate<
     // Like LLVM, integer negation is the binary op "0 - value"
     mlir::Type type = Fortran::lower::getFIRType(
         builder.getContext(), Fortran::common::TypeCategory::Integer, KIND,
+        /*params=*/std::nullopt);
+    mlir::Value zero = builder.createIntegerConstant(loc, type, 0);
+    return hlfir::EntityWithAttributes{
+        builder.create<mlir::arith::SubIOp>(loc, zero, lhs)};
+  }
+};
+
+template <int KIND>
+struct UnaryOp<Fortran::evaluate::Negate<
+    Fortran::evaluate::Type<Fortran::common::TypeCategory::Unsigned, KIND>>> {
+  using Op = Fortran::evaluate::Negate<
+      Fortran::evaluate::Type<Fortran::common::TypeCategory::Unsigned, KIND>>;
+  static hlfir::EntityWithAttributes gen(mlir::Location loc,
+                                         fir::FirOpBuilder &builder, const Op &,
+                                         hlfir::Entity lhs) {
+    // Like LLVM, integer negation is the binary op "0 - value"
+    mlir::Type type = Fortran::lower::getFIRType(
+        builder.getContext(), Fortran::common::TypeCategory::Unsigned, KIND,
         /*params=*/std::nullopt);
     mlir::Value zero = builder.createIntegerConstant(loc, type, 0);
     return hlfir::EntityWithAttributes{

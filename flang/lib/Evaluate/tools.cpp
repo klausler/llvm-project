@@ -451,6 +451,10 @@ std::optional<Expr<SomeType>> NumericOperation(
             return Package(PromoteAndCombine<OPR, TypeCategory::Real>(
                 std::move(rx), std::move(ry)));
           },
+          [&](Expr<SomeUnsigned> &&ix, Expr<SomeUnsigned> &&iy) {
+            return Package(PromoteAndCombine<OPR, TypeCategory::Unsigned>(
+                std::move(ix), std::move(iy)));
+          },
           // Mixed REAL/INTEGER operations
           [](Expr<SomeReal> &&rx, Expr<SomeInteger> &&iy) {
             return MixedRealLeft<OPR>(std::move(rx), std::move(iy));
@@ -517,6 +521,11 @@ std::optional<Expr<SomeType>> NumericOperation(
                 AsGenericExpr(ConvertTo(ry, std::move(bx))), std::move(y),
                 defaultRealKind);
           },
+          [&](BOZLiteralConstant &&bx, Expr<SomeUnsigned> &&iy) {
+            return NumericOperation<OPR>(messages,
+                AsGenericExpr(ConvertTo(iy, std::move(bx))), std::move(y),
+                defaultRealKind);
+          },
           [&](Expr<SomeInteger> &&ix, BOZLiteralConstant &&by) {
             return NumericOperation<OPR>(messages, std::move(x),
                 AsGenericExpr(ConvertTo(ix, std::move(by))), defaultRealKind);
@@ -524,6 +533,10 @@ std::optional<Expr<SomeType>> NumericOperation(
           [&](Expr<SomeReal> &&rx, BOZLiteralConstant &&by) {
             return NumericOperation<OPR>(messages, std::move(x),
                 AsGenericExpr(ConvertTo(rx, std::move(by))), defaultRealKind);
+          },
+          [&](Expr<SomeUnsigned> &&ix, BOZLiteralConstant &&by) {
+            return NumericOperation<OPR>(messages, std::move(x),
+                AsGenericExpr(ConvertTo(ix, std::move(by))), defaultRealKind);
           },
           // Default case
           [&](auto &&, auto &&) {
@@ -581,6 +594,7 @@ std::optional<Expr<SomeType>> Negation(
             messages.Say("LOGICAL cannot be negated"_err_en_US);
             return NoExpr();
           },
+          [&](Expr<SomeUnsigned> &&x) { return Package(-std::move(x)); },
           [&](Expr<SomeDerived> &&) {
             messages.Say("Operand cannot be negated"_err_en_US);
             return NoExpr();
@@ -718,6 +732,12 @@ std::optional<Expr<SomeType>> ConvertToType(
           ConvertToKind<TypeCategory::Integer>(type.kind(), std::move(*boz))};
     }
     return ConvertToNumeric<TypeCategory::Integer>(type.kind(), std::move(x));
+  case TypeCategory::Unsigned:
+    if (auto *cx{UnwrapExpr<Expr<SomeUnsigned>>(x)}) {
+      return Expr<SomeType>{
+          ConvertToKind<TypeCategory::Unsigned>(type.kind(), std::move(*cx))};
+    }
+    break;
   case TypeCategory::Real:
     if (auto *boz{std::get_if<BOZLiteralConstant>(&x.u)}) {
       return Expr<SomeType>{

@@ -44,6 +44,7 @@ TargetCharacteristics::TargetCharacteristics() {
   enableCategoryKinds(TypeCategory::Complex);
   enableCategoryKinds(TypeCategory::Character);
   enableCategoryKinds(TypeCategory::Logical);
+  enableCategoryKinds(TypeCategory::Unsigned);
 
   isBigEndian_ = !isHostLittleEndian;
 
