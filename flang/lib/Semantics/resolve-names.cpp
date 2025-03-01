@@ -6213,7 +6213,8 @@ bool DeclarationVisitor::Pre(const parser::ProcPointerInit &x) {
     const auto &null{DEREF(std::get_if<parser::NullInit>(&x.u))};
     Walk(null);
     if (auto nullInit{EvaluateExpr(null)}) {
-      if (!evaluate::IsNullPointer(*nullInit)) {
+      if (!evaluate::IsNullProcedurePointer(&*nullInit) &&
+          !evaluate::IsBareNullPointer(&*nullInit)) {
         Say(null.v.value().source,
             "Procedure pointer initializer must be a name or intrinsic NULL()"_err_en_US);
       }
@@ -8622,7 +8623,7 @@ void DeclarationVisitor::Initialization(const parser::Name &name,
           [&](const parser::NullInit &null) { // => NULL()
             Walk(null);
             if (auto nullInit{EvaluateExpr(null)}) {
-              if (!evaluate::IsNullPointer(*nullInit)) { // C813
+              if (!evaluate::IsNullPointer(&*nullInit)) { // C813
                 Say(null.v.value().source,
                     "Pointer initializer must be intrinsic NULL()"_err_en_US);
               } else if (IsPointer(ultimate)) {
@@ -8672,7 +8673,7 @@ void DeclarationVisitor::PointerInitialization(
             ultimate.set(Symbol::Flag::InDataStmt, false);
           } else if (auto *details{ultimate.detailsIf<ProcEntityDetails>()}) {
             // something like "REAL, EXTERNAL, POINTER :: p => t"
-            if (evaluate::IsNullProcedurePointer(*expr)) {
+            if (evaluate::IsNullProcedurePointer(&*expr)) {
               CHECK(!details->init());
               details->set_init(nullptr);
             } else if (const Symbol *
