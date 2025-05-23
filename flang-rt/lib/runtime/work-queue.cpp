@@ -87,9 +87,11 @@ RT_API_ATTRS Ticket &WorkQueue::StartTicket() {
     last_ = newTicket;
   }
   newTicket->ticket.begun = false;
+#if !defined(RT_DEVICE_COMPILATION)
   if (enableDebugOutput && (executionEnvironment.internalDebugging & 1)) {
     std::fprintf(stderr, "WQ: new ticket\n");
   }
+#endif
   return newTicket->ticket;
 }
 
@@ -97,14 +99,18 @@ RT_API_ATTRS int WorkQueue::Run() {
   while (last_) {
     TicketList *at{last_};
     insertAfter_ = last_;
+#if !defined(RT_DEVICE_COMPILATION)
     if (enableDebugOutput && (executionEnvironment.internalDebugging & 1)) {
       std::fprintf(stderr, "WQ: %zd %s\n", at->ticket.u.index(),
           at->ticket.begun ? "Continue" : "Begin");
     }
+#endif
     int stat{at->ticket.Continue(*this)};
+#if !defined(RT_DEVICE_COMPILATION)
     if (enableDebugOutput && (executionEnvironment.internalDebugging & 1)) {
       std::fprintf(stderr, "WQ: ... stat %d\n", stat);
     }
+#endif
     insertAfter_ = nullptr;
     if (stat == StatOk) {
       if (at->previous) {
