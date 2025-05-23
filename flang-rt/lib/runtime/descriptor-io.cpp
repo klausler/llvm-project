@@ -42,7 +42,7 @@ inline RT_API_ATTRS A &ExtractElement(IoStatementState &io,
 }
 
 // Defined formatted I/O (maybe)
-Fortran::common::optional<bool> DefinedFormattedIo(IoStatementState &io,
+static RT_API_ATTRS Fortran::common::optional<bool> DefinedFormattedIo(IoStatementState &io,
     const Descriptor &descriptor, const typeInfo::DerivedType &derived,
     const typeInfo::SpecialBinding &special,
     const SubscriptValue subscripts[]) {
@@ -132,7 +132,7 @@ Fortran::common::optional<bool> DefinedFormattedIo(IoStatementState &io,
 }
 
 // Defined unformatted I/O
-static bool DefinedUnformattedIo(IoStatementState &io,
+static RT_API_ATTRS bool DefinedUnformattedIo(IoStatementState &io,
     const Descriptor &descriptor, const typeInfo::DerivedType &derived,
     const typeInfo::SpecialBinding &special) {
   // Unformatted I/O must have an external unit (or child thereof).
